@@ -1,5 +1,4 @@
 import cv2
-import mediapipe as mp
 import os
 from datetime import datetime
 import calendar
@@ -26,15 +25,10 @@ if not os.path.exists(excel_file):
     ws.append(["Name", "Date", "Day", "Time"])
     wb.save(excel_file)
 
-# ---------------- FACE DETECTION ----------------
-def get_face_detector():
-    mp_face = mp.solutions.face_detection
-    return mp_face.FaceDetection(
-        model_selection=0,
-        min_detection_confidence=0.5
-    )
-
-face_detection = get_face_detector()
+# ---------------- FACE DETECTOR (HAAR CASCADE) ----------------
+face_cascade = cv2.CascadeClassifier(
+    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+)
 
 # ---------------- ATTENDANCE FUNCTION ----------------
 def mark_attendance(name):
@@ -58,10 +52,10 @@ def mark_attendance(name):
 class FaceProcessor(VideoProcessorBase):
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
-        rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        results = face_detection.process(rgb)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
-        if results.detections and not st.session_state["marked"]:
+        if len(faces) > 0 and not st.session_state["marked"]:
             saved = mark_attendance(st.session_state["name"])
             st.session_state["marked"] = True
 
@@ -74,7 +68,6 @@ class FaceProcessor(VideoProcessorBase):
 
 # ---------------- STREAMLIT UI ----------------
 name = st.text_input("Enter Your Name", key="name")
-
 start = st.checkbox("Start Attendance")
 
 if start:
@@ -82,7 +75,7 @@ if start:
         st.warning("Please enter your name")
     else:
         webrtc_streamer(
-            key="face-attendance",
+            key="attendance",
             video_processor_factory=FaceProcessor,
             media_stream_constraints={"video": True, "audio": False},
         )
